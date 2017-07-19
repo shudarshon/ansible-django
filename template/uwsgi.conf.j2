@@ -1,0 +1,14 @@
+[program:uwsgi]
+
+command={{ VIRTUALENV_PATH_APP }}/bin/uwsgi --http 0.0.0.0:{{ APP_PORT }} -b 65535 --chdir {{ APP_PATH }} --wsgi-file {{ APP_PATH }}/{{ APP }}/wsgi.py --virtualenv {{ VIRTUALENV_PATH_APP }}
+
+
+user=root
+numprocs=1
+stdout_logfile=/var/log/uwsgi.log
+stderr_logfile=/var/log/uwsgi.log
+autostart=true
+autorestart=true
+startsecs=10
+stopwaitsecs=300
+killasgroup=true
