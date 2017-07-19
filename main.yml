@@ -1,0 +1,139 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+
+  vars:
+    USER: ubuntu
+    HOME: "/home/{{ USER }}"
+    APP: app_name
+    APP_PATH: "{{ HOME }}/{{ APP }}"
+    APP_PORT: 8000
+    VIRTUALENV: virtualenv
+    VIRTUALENV_PATH: "{{ HOME }}/{{ VIRTUALENV }}"
+    VIRTUALENV_PATH_APP: "{{ VIRTUALENV_PATH }}/{{ APP }}"
+
+    SRC_PATH: /home/ubuntu/app/
+    DEST_PATH: "{{ APP_PATH }}"
+
+  tasks:
+    - name: create virtualenv directory
+      file:
+        path: "{{ VIRTUALENV_PATH_APP }}"
+        state: directory
+        owner: "{{ USER }}"
+        group: "{{ USER }}"
+        mode: 0764
+        recurse: yes
+
+    - name: copy app to specified pathi
+      synchronize:
+        src: "{{ SRC_PATH }}"
+        dest: "{{ DEST_PATH }}"
+        rsync_opts:
+          - "--exclude=*.pem"
+          - "--exclude=fabfile.py*"
+          - "--exclude=.git*"
+          - "--exclude=/devops"
+          - "--exclude=app.retry"
+          - "--exclude=app.yml"
+          - "--exclude=.app.yml.swp"
+
+    - name: create uwsgi and application log file
+      copy:
+        content: ""
+        dest: /var/log/uwsgi.log
+        force: no
+        owner: "{{ USER }}"
+        group: root
+        mode: 0764
+    - copy:
+        content: ""
+        dest: "/var/log/{{ APP }}.log"
+        force: no
+        owner: "{{ USER }}"
+        group: root
+        mode: 0764
+
+    - name: update package manager
+      package:
+        update_cache: yes
+
+    - name: install software packages
+      package:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - python-setuptools
+        - python-dev
+        - make
+        - automake
+        - gcc
+        - libxml2
+        - libxml2-dev
+        - libxslt-dev
+        - libtidy-dev
+        - python-lxml
+        - htop
+        - iftop
+        - libjpeg62
+        - zlib1g-dev
+        - libjpeg8-dev
+        - libjpeg-dev
+        - libfreetype6-dev
+        - libpng-dev
+        - libgif-dev
+        - libcurl4-gnutls-dev
+        - librtmp-dev
+        - libjpeg-turbo8-dev
+        - libjpeg62-dev
+        - dcmtk
+        - nginx
+        - supervisor
+
+    - name: enable services
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+    - systemd:
+        name: supervisor
+        state: started
+        enabled: yes
+
+    - easy_install:
+        name: pip
+        state: latest
+    - pip:
+        name: virtualenv
+        state: latest
+    - pip:
+        requirements: "{{ APP_PATH }}/requirements.txt"
+        virtualenv: "{{ VIRTUALENV_PATH_APP }}"
+
+    - name: set nginx and uwsgi configuration
+      template:
+        src: template/nginx.conf.j2
+        dest: /etc/nginx/sites-enabled/nginx.conf
+
+    - template:
+        src: template/uwsgi.conf.j2
+        dest: /etc/supervisor/conf.d/uwsgi.conf
+
+    - supervisorctl:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - uwsgi
+
+    - supervisorctl:
+        name: "{{ item }}"
+        state: started
+      with_items:
+        - uwsgi
+
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+...
